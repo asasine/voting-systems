@@ -1,0 +1,13 @@
+### Visual Studio ###
+.vs/
+
+### Visual Studio Code ###
+.vscode/
+
+### Data ###
+input/
+output/
+
+### .NET ###
+bin/
+obj/
