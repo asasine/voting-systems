@@ -5,8 +5,7 @@
 .vscode/
 
 ### Data ###
-input/
-output/
+data/
 
 ### .NET ###
 bin/

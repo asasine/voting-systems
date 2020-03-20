@@ -77,7 +77,7 @@ namespace Vote
             }
             else
             {
-                var candidates = await FilenameToCandidates("/Users/adam/Projects/Vote/output/ballot.txt");
+                var candidates = await FilenameToCandidates("/Users/adam/Projects/Vote/data/output/ballot.txt");
                 return candidates.ToHashSet();
             }
         }
@@ -94,7 +94,7 @@ namespace Vote
             }
             else
             {
-                var files = Directory.EnumerateFiles("/Users/adam/Projects/Vote/input/votes");
+                var files = Directory.EnumerateFiles("/Users/adam/Projects/Vote/data/input/votes");
                 var votes = await Task.WhenAll(files.Select(FilenameToCandidates));
                 return votes.Select(vote => vote.ToList());
             }
