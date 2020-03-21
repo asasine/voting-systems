@@ -42,8 +42,5 @@ namespace Vote.VotingSystems
 
             return new Result[] { winner };
         }
-
-        public override Result GetWinner(ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes)
-            => this.GetRankedResults(candidates, votes).First();
     }
 }

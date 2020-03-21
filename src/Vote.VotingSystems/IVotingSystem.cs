@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 
 namespace Vote.VotingSystems
 {
@@ -12,6 +13,10 @@ namespace Vote.VotingSystems
         /// <param name="votes">The population's votes. Each individual's votes is ranked with the highest rank as the first element.</param>
         /// <returns>An ordered collection of candidates with the winner as the first element.</returns>
         IReadOnlyCollection<Result> GetRankedResults(ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes);
+    }
+
+    public static class VotingSystemExtensions
+    {
 
         /// <summary>
         /// Returns the winner.
@@ -19,6 +24,7 @@ namespace Vote.VotingSystems
         /// <param name="candidates">The candidates.</param>
         /// <param name="votes">The population's votes. Each individual's votes is ranked with the highest rank as the first element.</param>
         /// <returns>The winner.</returns>
-        Result GetWinner(ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes);
+        public static Result GetWinner(this IVotingSystem votingSystem, ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes)
+            => votingSystem.GetRankedResults(candidates, votes).FirstOrDefault();
     }
 }

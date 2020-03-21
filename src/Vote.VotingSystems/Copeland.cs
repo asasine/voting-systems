@@ -75,8 +75,5 @@ namespace Vote.VotingSystems
                 .ThenBy(result => result.Losses)
                 .ToList();
         }
-
-        public virtual Result GetWinner(ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes)
-            => this.GetRankedResults(candidates, votes).First();
     }
 }
