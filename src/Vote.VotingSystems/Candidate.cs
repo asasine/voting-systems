@@ -28,13 +28,13 @@ namespace Vote.VotingSystems
 
         public bool Equals(Candidate other)
         {
-            return other != null &&
-                    this.Name.Equals(other.Name, StringComparison.OrdinalIgnoreCase);
+            return other != null
+                && this.Name.Equals(other.Name, StringComparison.OrdinalIgnoreCase);
         }
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(Name);
+            return StringComparer.OrdinalIgnoreCase.GetHashCode(Name);
         }
 
         public static bool operator ==(Candidate left, Candidate right)
