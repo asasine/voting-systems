@@ -16,12 +16,18 @@ namespace Vote
 {
     class Program
     {
-        static async Task<int> Main(string[] args) => await Parser
+        static async Task<int> Main(string[] args)
+        {
+            var returnCode = await Parser
             .Default
             .ParseArguments(args, LoadVerbs())
-            .MapResult<Options, Task<int>>(
-                async options => (int)(await RunAsync(options)),
-                _ => Task.FromResult((int)ReturnCode.FailedToParseOptions));
+            .MapResult<Options, Task<ReturnCode>>(
+                async options => await RunAsync(options),
+                _ => Task.FromResult(ReturnCode.FailedToParseOptions));
+
+            Console.WriteLine($"Exiting with code {(int)returnCode} ({returnCode})");
+            return (int)returnCode;
+        }
 
         static Type[] LoadVerbs()
             => Assembly
@@ -37,7 +43,6 @@ namespace Vote
             var logger = serviceProvider.GetService<ILogger<Program>>();
 
             logger.LogDebug("hello world");
-            logger.LogInformation("Candidates path: {candidatesPath}", options.CandidatesPath);
 
             var results = await RunVotingMethodAsync(options, serviceProvider);
             if (results == null)
@@ -60,7 +65,7 @@ namespace Vote
 
         static async Task<IReadOnlyCollection<Result>> RunVotingMethodAsync(Options options, IServiceProvider serviceProvider)
         {
-            Copeland votingSystem;
+            IVotingSystem votingSystem;
             switch (options)
             {
                 case CopelandWeightedRandomOptions _:
@@ -68,6 +73,9 @@ namespace Vote
                     break;
                 case CopelandOptions _:
                     votingSystem = serviceProvider.GetService<Copeland>();
+                    break;
+                case FirstPastThePostOptions _:
+                    votingSystem = serviceProvider.GetService<FirstPastThePost>();
                     break;
                 default:
                     return null;
