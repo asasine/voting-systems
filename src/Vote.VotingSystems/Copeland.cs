@@ -1,30 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using Microsoft.Extensions.Logging;
 
 namespace Vote.VotingSystems
 {
-    public class Copeland
+    public class Copeland : IVotingSystem
     {
-        private readonly ILogger logger;
-
-        public Copeland(ILogger<Copeland> logger)
-        {
-            this.logger = logger;
-        }
-
-        /// <summary>
-        /// Returns an ordered collection of candidates with the winner as the first element and the loser as the last element.
-        /// Each element's key is the candidate and the value is their net score.
-        /// </summary>
-        /// <param name="candidates">The candidates.</param>
-        /// <param name="votes">
-        /// The population's votes.
-        /// Each individual's votes is ranked with the highest rank as the first element.
-        /// </param>
-        /// <returns>An ordered collection of candidates with the winner as the first element.</returns>
-        public IReadOnlyCollection<Result> GetResults(ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes)
+        public virtual IReadOnlyCollection<Result> GetRankedResults(ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes)
         {
             // AvB, AvC, AvD, AvE, BvC, BvD, BvE, CvD, etc.
             var pairs = candidates
@@ -94,5 +75,8 @@ namespace Vote.VotingSystems
                 .ThenBy(result => result.Losses)
                 .ToList();
         }
+
+        public virtual Result GetWinner(ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes)
+            => this.GetRankedResults(candidates, votes).First();
     }
 }

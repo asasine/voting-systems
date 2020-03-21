@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
+using CommandLine;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -14,33 +16,71 @@ namespace Vote
 {
     class Program
     {
-        static async Task Main(string[] args)
+        static async Task<int> Main(string[] args) => await Parser
+            .Default
+            .ParseArguments(args, LoadVerbs())
+            .MapResult<Options, Task<int>>(
+                async options => (int)(await RunAsync(options)),
+                _ => Task.FromResult((int)ReturnCode.FailedToParseOptions));
+
+        static Type[] LoadVerbs()
+            => Assembly
+                .GetAssembly(typeof(Options))
+                .GetTypes()
+                .Where(type => type.GetCustomAttribute<VerbAttribute>() != null)
+                .ToArray();
+
+        static async Task<ReturnCode> RunAsync(Options options)
         {
-            var serviceProvider = GetServiceProvider();
+            var serviceProvider = GetServiceProvider(options);
 
             var logger = serviceProvider.GetService<ILogger<Program>>();
 
             logger.LogDebug("hello world");
+            logger.LogInformation("Candidates path: {candidatesPath}", options.CandidatesPath);
 
-            const bool mock = true;
-            var candidates = await GetCandidatesAsync(mock);
-            var votes = await GetVotesAsync(mock);
+            var results = await RunVotingMethodAsync(options, serviceProvider);
+            if (results == null)
+            {
+                return ReturnCode.UnknownVotingMethod;
+            }
 
-            var votingSystem = serviceProvider.GetService<Copeland>();
-            var results = votingSystem.GetResults(candidates, votes);
             foreach (var result in results)
             {
                 logger.LogInformation("{result}", result);
-                // Console.WriteLine($"{result.Candidate.Name} with {result.Net} net");
             }
 
             if (serviceProvider is IDisposable disposable)
             {
                 disposable.Dispose();
             }
+
+            return ReturnCode.Success;
         }
 
-        static IServiceProvider GetServiceProvider()
+        static async Task<IReadOnlyCollection<Result>> RunVotingMethodAsync(Options options, IServiceProvider serviceProvider)
+        {
+            Copeland votingSystem;
+            switch (options)
+            {
+                case CopelandWeightedRandomOptions _:
+                    votingSystem = serviceProvider.GetService<CopelandWeightedRandom>();
+                    break;
+                case CopelandOptions _:
+                    votingSystem = serviceProvider.GetService<Copeland>();
+                    break;
+                default:
+                    return null;
+            }
+
+            var candidates = await GetCandidatesAsync(options);
+            var votes = await GetVotesAsync(options);
+
+            var results = votingSystem.GetRankedResults(candidates, votes);
+            return results;
+        }
+
+        static IServiceProvider GetServiceProvider(Options options)
         {
             var serviceCollection = new ServiceCollection();
 
@@ -55,7 +95,8 @@ namespace Vote
                         .SetMinimumLevel(LogLevel.Debug);
                 })
                 .AddConfiguration()
-                .AddVotingSystems();
+                .AddVotingSystems()
+                .AddSingleton<Random>();
 
             serviceCollection
                 .AddHttpClient<IMDbApiService>(c =>
@@ -63,13 +104,25 @@ namespace Vote
                     c.BaseAddress = new Uri("https://imdb-api.com/");
                 });
 
+            // add options as the base type
+            serviceCollection.AddSingleton(options);
+
+            // add options as all of its runtime types
+            var optionsType = typeof(Options);
+            var type = options.GetType();
+            while (type != optionsType)
+            {
+                serviceCollection.AddSingleton(options.GetType(), options);
+                type = type.BaseType;
+            }
+
             return serviceCollection
                 .BuildServiceProvider();
         }
 
-        static async Task<ISet<Candidate>> GetCandidatesAsync(bool mock)
+        static async Task<ISet<Candidate>> GetCandidatesAsync(Options options)
         {
-            if (mock)
+            if (options.UseMockData)
             {
                 return new string[] { "A", "B", "C", "D", "E", }
                     .Select(c => new Candidate(c))
@@ -77,14 +130,14 @@ namespace Vote
             }
             else
             {
-                var candidates = await FilenameToCandidates("/Users/adam/Projects/Vote/data/output/ballot.txt");
+                var candidates = await FilenameToCandidates(options.CandidatesPath);
                 return candidates.ToHashSet();
             }
         }
 
-        static async Task<IEnumerable<IEnumerable<Candidate>>> GetVotesAsync(bool mock)
+        static async Task<IEnumerable<IEnumerable<Candidate>>> GetVotesAsync(Options options)
         {
-            if (mock)
+            if (options.UseMockData)
             {
                 return Enumerable.Repeat(new string[] { "A", "E", "C", "D", "B", }, 31)
                     .Concat(Enumerable.Repeat(new string[] { "B", "A", "E", }, 30))
@@ -94,7 +147,7 @@ namespace Vote
             }
             else
             {
-                var files = Directory.EnumerateFiles("/Users/adam/Projects/Vote/data/input/votes");
+                var files = Directory.EnumerateFiles(options.VotesDirectory);
                 var votes = await Task.WhenAll(files.Select(FilenameToCandidates));
                 return votes.Select(vote => vote.ToList());
             }
@@ -107,6 +160,13 @@ namespace Vote
                 .Where(line => !string.IsNullOrWhiteSpace(line))
                 .Select(line => line.Trim())
                 .Select(line => new Candidate(line));
+        }
+
+        private enum ReturnCode
+        {
+            Success = 0,
+            FailedToParseOptions = 1,
+            UnknownVotingMethod = 2,
         }
     }
 
@@ -129,8 +189,20 @@ namespace Vote
 
         public static IServiceCollection AddVotingSystems(this IServiceCollection services)
         {
-            return services
-                .AddSingleton<Copeland>();
+            var votingSystemType = typeof(IVotingSystem);
+            var types = Assembly
+                .GetAssembly(votingSystemType)
+                .GetTypes()
+                .Where(type => !(type.IsInterface || type.IsAbstract))
+                .Where(type => votingSystemType.IsAssignableFrom(type))
+                .ToArray();
+
+            foreach (var type in types)
+            {
+                services.AddSingleton(type);
+            }
+
+            return services;
         }
     }
 }

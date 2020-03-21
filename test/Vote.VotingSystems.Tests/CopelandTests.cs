@@ -29,9 +29,9 @@ namespace Vote.VotingSystems.Tests
                 new Result(new Candidate("D"), 1, 3),
             };
 
-            var copeland = new Copeland(A.Fake<ILogger<Copeland>>());
-            var actualResults = copeland.GetResults(candidates, votes);
-            
+            var copeland = new Copeland();
+            var actualResults = copeland.GetRankedResults(candidates, votes);
+
             Assert.Equal(expectedResults.Count(), actualResults.Count());
             foreach (var (expected, actual) in expectedResults.Zip(actualResults))
             {
@@ -63,8 +63,8 @@ namespace Vote.VotingSystems.Tests
                 new Result(memphis, 0, 3),
             };
 
-            var copeland = new Copeland(A.Fake<ILogger<Copeland>>());
-            var actualResults = copeland.GetResults(candidates, votes);
+            var copeland = new Copeland();
+            var actualResults = copeland.GetRankedResults(candidates, votes);
 
             Assert.Equal(expectedResults.Count(), actualResults.Count());
             foreach (var (expected, actual) in expectedResults.Zip(actualResults))
