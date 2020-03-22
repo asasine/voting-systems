@@ -1,10 +1,18 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Extensions.Logging;
 
 namespace Vote.VotingSystems
 {
     public class Copeland : IVotingSystem
     {
+        private readonly ILogger logger;
+
+        public Copeland(ILogger<Copeland> logger)
+        {
+            this.logger = logger;
+        }
+
         public virtual IReadOnlyCollection<Result> GetRankedResults(ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes)
         {
             // AvB, AvC, AvD, AvE, BvC, BvD, BvE, CvD, etc.
@@ -20,7 +28,16 @@ namespace Vote.VotingSystems
                 var candidatesInThisVote = new HashSet<Candidate>();
 
                 var voteWithoutWriteIns = vote
-                    .Where(candidate => candidates.Contains(candidate))
+                    .Where(candidate =>
+                    {
+                        var contains = candidates.Contains(candidate);
+                        if (!contains)
+                        {
+                            this.logger.LogInformation("{candidate} is a write-in", candidate);
+                        }
+
+                        return contains;
+                    })
                     .ToArray();
 
                 for (int i = 0; i < voteWithoutWriteIns.Length; i++)
@@ -52,6 +69,7 @@ namespace Vote.VotingSystems
             {
                 var lhsWins = wins[lhs][rhs];
                 var rhsWins = wins[rhs][lhs];
+                this.logger.LogTrace("{lhs} ({lhsWins}) vs {rhs} ({rhsWins})", lhs, lhsWins, rhs, rhsWins);
                 if (lhsWins > rhsWins)
                 {
                     // lhs wins, rhs loses

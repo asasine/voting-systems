@@ -29,7 +29,7 @@ namespace Vote.VotingSystems.Tests
                 new Result(new Candidate("D"), 1, 3),
             };
 
-            var copeland = new Copeland();
+            var copeland = new Copeland(A.Fake<ILogger<Copeland>>());
             var actualResults = copeland.GetRankedResults(candidates, votes);
 
             Assert.Equal(expectedResults.Count(), actualResults.Count());
@@ -63,7 +63,7 @@ namespace Vote.VotingSystems.Tests
                 new Result(memphis, 0, 3),
             };
 
-            var copeland = new Copeland();
+            var copeland = new Copeland(A.Fake<ILogger<Copeland>>());
             var actualResults = copeland.GetRankedResults(candidates, votes);
 
             Assert.Equal(expectedResults.Count(), actualResults.Count());

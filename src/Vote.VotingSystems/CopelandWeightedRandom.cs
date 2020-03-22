@@ -9,7 +9,8 @@ namespace Vote.VotingSystems
     {
         private readonly Random random;
 
-        public CopelandWeightedRandom(Random random)
+        public CopelandWeightedRandom(Random random, ILogger<CopelandWeightedRandom> logger)
+            : base(logger)
         {
             this.random = random;
         }
