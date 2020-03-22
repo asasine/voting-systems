@@ -42,8 +42,6 @@ namespace Vote
 
             var logger = serviceProvider.GetService<ILogger<Program>>();
 
-            logger.LogDebug("hello world");
-
             var results = await RunVotingMethodAsync(options, serviceProvider);
             if (results == null)
             {
@@ -52,7 +50,7 @@ namespace Vote
 
             foreach (var result in results)
             {
-                logger.LogInformation("{result}", result);
+                logger.LogWarning("{result}", result);
             }
 
             if (serviceProvider is IDisposable disposable)
@@ -96,11 +94,8 @@ namespace Vote
                 .AddLogging(loggingBuilder =>
                 {
                     loggingBuilder
-                        .AddConsole(options =>
-                        {
-                            options.IncludeScopes = false;
-                        })
-                        .SetMinimumLevel(LogLevel.Debug);
+                        .AddConsole()
+                        .SetMinimumLevel(options.LogLevel);
                 })
                 .AddConfiguration()
                 .AddVotingSystems()

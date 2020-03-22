@@ -1,4 +1,5 @@
 ﻿using CommandLine;
+using Microsoft.Extensions.Logging;
 
 namespace Vote.Configuration
 {
@@ -12,5 +13,8 @@ namespace Vote.Configuration
 
         [Option("use-mock-data", SetName = "mock-data", Default = false, Required = true, HelpText = "True to use mock data.")]
         public bool UseMockData { get; set; }
+
+        [Option("log-level", Default = LogLevel.Information, Required = false, HelpText = "Sets the output logging level.")]
+        public LogLevel LogLevel{ get; set;}
     }
 }
