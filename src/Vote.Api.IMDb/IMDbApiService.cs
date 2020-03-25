@@ -4,43 +4,75 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Polly;
+using Polly.Registry;
 using Vote.Configuration;
 
 namespace Vote.Api.IMDb
 {
     public class IMDbApiService
     {
+        public const string SearchPolicyKey = "searchApiPolicy";
+        public const string RatingsPolicyKey = "ratingsApiPolicy";
+
         private readonly ILogger logger;
         private readonly Secrets.IMDbApi secrets;
         private readonly HttpClient httpClient;
+        private readonly IAsyncPolicy<SearchResult> searchApiPolicy;
+        private readonly IAsyncPolicy<RatingsResult> ratingsApiPolicy;
 
-        public IMDbApiService(ILogger<IMDbApiService> logger, Secrets.IMDbApi secrets, HttpClient httpClient)
+        public IMDbApiService(ILogger<IMDbApiService> logger, Secrets.IMDbApi secrets, HttpClient httpClient, IReadOnlyPolicyRegistry<string> policyRegistry)
         {
             this.logger = logger;
             this.secrets = secrets;
             this.httpClient = httpClient;
+
+            this.searchApiPolicy = policyRegistry.Get<IAsyncPolicy<SearchResult>>(SearchPolicyKey);
+            this.ratingsApiPolicy = policyRegistry.Get<IAsyncPolicy<RatingsResult>>(RatingsPolicyKey);
         }
 
-        public async Task<SearchResult> SearchForMovieAsync(string expression)
+        public async Task<SearchResult> SearchForTitleAsync(string expression)
         {
-            this.logger.LogDebug("Searching for {expression}", expression);
-            var uri = GetUri("SearchMovie", expression);
-            var request = new HttpRequestMessage(HttpMethod.Get, uri);
-            var response = await httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            var result = await response.Content.ReadAsJsonAsync<SearchResult>();
-            return result;
+            var context = new Context(expression)
+            {
+                ["logger"] = this.logger,
+            };
+
+            return await this.searchApiPolicy.ExecuteAsync(searchForTitleAsync, context);
+
+            async Task<SearchResult> searchForTitleAsync(Context context)
+            {
+                var expression = context.OperationKey;
+                this.logger.LogDebug("Searching for {expression}", expression);
+                var uri = GetUri("SearchTitle", expression);
+                var request = new HttpRequestMessage(HttpMethod.Get, uri);
+                var response = await httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+                var result = await response.Content.ReadAsJsonAsync<SearchResult>();
+                return result;
+            }
         }
 
         public async Task<RatingsResult> GetRatingsAsync(string id)
         {
-            this.logger.LogDebug("Getting ratings for {id}", id);
-            var uri = GetUri("Ratings", id);
-            var request = new HttpRequestMessage(HttpMethod.Get, uri);
-            var response = await httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            var result = await response.Content.ReadAsJsonAsync<RatingsResult>();
-            return result;
+            var context = new Context(id)
+            {
+                ["logger"] = this.logger,
+            };
+
+            return await this.ratingsApiPolicy.ExecuteAsync(getRatingsAsync, context);
+
+            async Task<RatingsResult> getRatingsAsync(Context context)
+            {
+                var id = context.OperationKey;
+                this.logger.LogDebug("Getting ratings for {id}", id);
+                var uri = GetUri("Ratings", id);
+                var request = new HttpRequestMessage(HttpMethod.Get, uri);
+                var response = await httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+                var result = await response.Content.ReadAsJsonAsync<RatingsResult>();
+                return result;
+            }
         }
 
         private Uri GetUri(string api, params string[] args)

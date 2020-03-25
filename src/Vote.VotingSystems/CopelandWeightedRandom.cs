@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace Vote.VotingSystems
@@ -15,13 +16,13 @@ namespace Vote.VotingSystems
             this.random = random;
         }
 
-        public override IReadOnlyCollection<Result> GetRankedResults(ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes)
+        public override async Task<IReadOnlyCollection<Result>> GetRankedResultsAsync(ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes)
         {
             // use the Alias method to sample from a discrete distribution
             // the discrete distribution is found by converting the net score of each result into a weight
             // copeland's methodd yields net scores in the range [-n+1, n-1] where n is the number of candidates
             // convert this to a discrete distribution of [1, 2*n-1]
-            var copelandResults = base.GetRankedResults(candidates, votes).ToList();
+            var copelandResults = (await base.GetRankedResultsAsync(candidates, votes)).ToList();
             var n = candidates.Count();
             var probabilities = copelandResults
                 .Select(result => result.Net)

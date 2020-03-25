@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace Vote.VotingSystems
@@ -13,7 +14,7 @@ namespace Vote.VotingSystems
             this.logger = logger;
         }
 
-        public virtual IReadOnlyCollection<Result> GetRankedResults(ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes)
+        public virtual Task<IReadOnlyCollection<Result>> GetRankedResultsAsync(ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes)
         {
             // AvB, AvC, AvD, AvE, BvC, BvD, BvE, CvD, etc.
             var pairs = candidates
@@ -86,12 +87,14 @@ namespace Vote.VotingSystems
                 // else it's a tie
             }
 
-            return candidates
+            IReadOnlyCollection<Result> result = candidates
                 .Select(candidate => new Result(candidate, netWins[candidate], netLosses[candidate]))
                 .OrderByDescending(result => result.Net)
                 .ThenByDescending(result => result.Wins)
                 .ThenBy(result => result.Losses)
                 .ToList();
+
+            return Task.FromResult(result);
         }
     }
 }

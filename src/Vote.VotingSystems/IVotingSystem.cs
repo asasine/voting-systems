@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace Vote.VotingSystems
 {
@@ -12,7 +13,7 @@ namespace Vote.VotingSystems
         /// <param name="candidates">The candidates.</param>
         /// <param name="votes">The population's votes. Each individual's votes is ranked with the highest rank as the first element.</param>
         /// <returns>An ordered collection of candidates with the winner as the first element.</returns>
-        IReadOnlyCollection<Result> GetRankedResults(ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes);
+        Task<IReadOnlyCollection<Result>> GetRankedResultsAsync(ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes);
     }
 
     public static class VotingSystemExtensions
@@ -24,7 +25,7 @@ namespace Vote.VotingSystems
         /// <param name="candidates">The candidates.</param>
         /// <param name="votes">The population's votes. Each individual's votes is ranked with the highest rank as the first element.</param>
         /// <returns>The winner.</returns>
-        public static Result GetWinner(this IVotingSystem votingSystem, ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes)
-            => votingSystem.GetRankedResults(candidates, votes).FirstOrDefault();
+        public static async Task<Result> GetWinnerAsync(this IVotingSystem votingSystem, ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes)
+            => (await votingSystem.GetRankedResultsAsync(candidates, votes)).FirstOrDefault();
     }
 }

@@ -5,9 +5,19 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using CommandLine;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using Polly;
+using Polly.Caching;
+using Polly.Caching.Distributed;
+using Polly.Caching.Memory;
+using Polly.Caching.Serialization.Json;
+using Polly.Contrib.WaitAndRetry;
+using Polly.Registry;
+using StackExchange.Redis;
 using Vote.Api.IMDb;
 using Vote.Configuration;
 using Vote.VotingSystems;
@@ -75,6 +85,9 @@ namespace Vote
                 case FirstPastThePostOptions _:
                     votingSystem = serviceProvider.GetService<FirstPastThePost>();
                     break;
+                case BracketOptions _:
+                    votingSystem = serviceProvider.GetService<Bracket>();
+                    break;
                 default:
                     return null;
             }
@@ -82,7 +95,7 @@ namespace Vote
             var candidates = await GetCandidatesAsync(options);
             var votes = await GetVotesAsync(options);
 
-            var results = votingSystem.GetRankedResults(candidates, votes);
+            var results = await votingSystem.GetRankedResultsAsync(candidates, votes);
             return results;
         }
 
@@ -100,6 +113,18 @@ namespace Vote
                 .AddConfiguration()
                 .AddVotingSystems()
                 .AddSingleton<Random>();
+
+
+            serviceCollection
+                .AddMemoryCache()
+                .AddSingleton<MemoryCacheProvider>()
+                .AddStackExchangeRedisCache(options =>
+                {
+                    options.Configuration = "localhost";
+                    options.InstanceName = Assembly.GetExecutingAssembly().GetName().Name;
+                });
+
+            serviceCollection.AddPolly();
 
             serviceCollection
                 .AddHttpClient<IMDbApiService>(c =>
@@ -206,6 +231,79 @@ namespace Vote
             }
 
             return services;
+        }
+
+        public static IServiceCollection AddPolly(this IServiceCollection services)
+        {
+            return services.AddSingleton<IReadOnlyPolicyRegistry<string>, PolicyRegistry>(serviceProvider =>
+            {
+                var registry = new PolicyRegistry();
+                var serializerSettings = new JsonSerializerSettings();
+
+                var delay = Backoff.DecorrelatedJitterBackoffV2(medianFirstRetryDelay: TimeSpan.FromSeconds(1), retryCount: 5, fastFirst: true);
+                var redisTransientErrorPolicy = Policy
+                    .Handle<RedisConnectionException>()
+                    .Or<RedisTimeoutException>()
+                    .WaitAndRetryAsync(
+                        delay,
+                        onRetry: (exception, currentDelat, context) =>
+                        {
+                            var logger = context["logger"] as ILogger;
+                            logger?.LogCritical("Retrying {key} with delay {delay}", context.OperationKey, currentDelat);
+                        });
+
+                static string typedCacheKeyStrategy<T>(Context context)
+                    => $"{typeof(T).FullName}-{context.OperationKey}";
+
+                IAsyncPolicy<TResult> getCachePolicy<TResult>()
+                {
+                    var cacheProvider = serviceProvider.GetRequiredService<MemoryCacheProvider>().AsyncFor<TResult>();
+                    var memoryCachePolicy = Policy.CacheAsync(
+                        cacheProvider: cacheProvider,
+                        ttl: TimeSpan.FromMinutes(5),
+                        cacheKeyStrategy: typedCacheKeyStrategy<TResult>);
+
+                    var distributedCacheTransientErrorRetryPolicy = redisTransientErrorPolicy.AsAsyncPolicy<TResult>();
+                    var serializer = new JsonSerializer<TResult>(serializerSettings);
+                    var distributedCache = serviceProvider
+                        .GetRequiredService<IDistributedCache>()
+                        .AsAsyncCacheProvider<string>()
+                        .WithSerializer<TResult, string>(serializer);
+
+                    // calls to distributed cache should handle and retry transient errors
+                    var distributedCachePolicy = Policy.WrapAsync(
+                                    distributedCacheTransientErrorRetryPolicy,
+                                    Policy.CacheAsync(
+                                        cacheProvider: distributedCache,
+                                        ttl: TimeSpan.FromDays(7),
+                                        cacheKeyStrategy: typedCacheKeyStrategy<TResult>,
+                                        onCacheGet: (context, key) => { },
+                                        onCacheMiss: (context, key) => { },
+                                        onCachePut: (context, key) => { },
+                                        onCacheGetError: (context, key, exception) =>
+                                        {
+                                            var logger = context["logger"] as ILogger;
+                                            logger?.LogWarning("Failed to get key {key}: {ex}", key, exception);
+                                        },
+                                        onCachePutError: (context, key, exception) =>
+                                        {
+                                            var logger = context["logger"] as ILogger;
+                                            logger?.LogWarning("Failed to put key {key}: {ex}", key, exception);
+                                        }));
+
+                    // check memory cache, then check distributed cache
+                    var fullCachePolicy = Policy.WrapAsync(
+                                    memoryCachePolicy,
+                                    distributedCachePolicy);
+
+                    return fullCachePolicy;
+                }
+
+                registry.Add(IMDbApiService.RatingsPolicyKey, getCachePolicy<IMDbApiService.RatingsResult>());
+                registry.Add(IMDbApiService.SearchPolicyKey, getCachePolicy<IMDbApiService.SearchResult>());
+
+                return registry;
+            });
         }
     }
 }

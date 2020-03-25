@@ -1,12 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace Vote.VotingSystems
 {
     public class FirstPastThePost : IVotingSystem
     {
-        public IReadOnlyCollection<Result> GetRankedResults(ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes)
+        public Task<IReadOnlyCollection<Result>> GetRankedResultsAsync(ISet<Candidate> candidates, IEnumerable<IEnumerable<Candidate>> votes)
         {
             var seed = new Dictionary<Candidate, int>();
             var results = votes
@@ -14,7 +15,7 @@ namespace Vote.VotingSystems
                 .Where(candidate => candidate != default)
                 .Aggregate(seed, func, resultSelector);
 
-            return results;
+            return Task.FromResult(results);
 
             static Dictionary<Candidate, int> func(Dictionary<Candidate, int> tally, Candidate candidate)
             {

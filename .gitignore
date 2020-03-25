@@ -6,6 +6,7 @@
 
 ### Data ###
 data/
+*.rdb
 
 ### .NET ###
 bin/
